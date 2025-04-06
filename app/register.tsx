@@ -1,7 +1,7 @@
 import { Text, View } from "react-native";
 import { Link } from "expo-router";
 
-export default function () {
+export default function Login () {
   return (
     <View
       style={{
@@ -10,11 +10,8 @@ export default function () {
         alignItems: "center",
       }}
     >
-      <Text>Edit app/index.tsx to edit this screen.</Text>
-      <Link href="/login">
-        Login
-      </Link>
-      <Link href="/register">
+      <Text>Edit app/register.tsx to edit this screen.</Text>
+      <Link href="/(tabs)/chat">
         Register
       </Link>
     </View>

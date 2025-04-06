@@ -1,7 +1,7 @@
 import { Text, View } from "react-native";
 import { Link } from "expo-router";
 
-export default function () {
+export default function Login () {
   return (
     <View
       style={{
@@ -11,11 +11,8 @@ export default function () {
       }}
     >
       <Text>Edit app/index.tsx to edit this screen.</Text>
-      <Link href="/login">
+      <Link href="/(tabs)/chat">
         Login
-      </Link>
-      <Link href="/register">
-        Register
       </Link>
     </View>
   );
