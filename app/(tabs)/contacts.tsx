@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 
-export default function () {
+export default function Contacts() {
   return (
     <View
       style={{
@@ -9,7 +9,7 @@ export default function () {
         alignItems: "center",
       }}
     >
-      <Text>Edit app/index.tsx to edit this screen.</Text>
+      <Text>Edit app/(tabs)/contacts.tsx to edit this screen.</Text>
     </View>
   );
 }
