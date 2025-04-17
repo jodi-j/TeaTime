@@ -1,5 +1,5 @@
 import { supabase } from '../utils/supabase';
-import { Text, View, Image } from "react-native";
+import { View, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { Button, ButtonText } from "@/components/ui/button"
 
