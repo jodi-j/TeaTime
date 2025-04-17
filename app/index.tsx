@@ -1,8 +1,11 @@
 import { supabase } from '../utils/supabase';
-import { Text, View } from "react-native";
-import { Link } from "expo-router";
+import { Text, View, Image } from "react-native";
+import { useRouter } from "expo-router";
+import { Button, ButtonText } from "@/components/ui/button"
 
 export default function () {
+  const router = useRouter();
+
   return (
     <View
       style={{
@@ -11,13 +14,15 @@ export default function () {
         alignItems: "center",
       }}
     >
-      <Text>Edit app/index.tsx to edit this screen. souad was here</Text>
-      <Link href="/login">
-        Login
-      </Link>
-      <Link href="/register">
-        Register
-      </Link>
+      <Image source={require('../assets/images/logo.jpg')}></Image>
+
+      <Button size="lg" variant="solid" action="primary" onPress={() => router.push('/register')}>
+        <ButtonText>Register</ButtonText>
+      </Button>
+
+      <Button size="lg" variant="solid" action="secondary" onPress={() => router.push('/login')}>
+        <ButtonText>Login</ButtonText>
+      </Button>
     </View>
   );
 }
