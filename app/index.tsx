@@ -1,3 +1,4 @@
+import { supabase } from '../utils/supabase';
 import { Text, View } from "react-native";
 import { Link } from "expo-router";
 
@@ -10,7 +11,7 @@ export default function () {
         alignItems: "center",
       }}
     >
-      <Text>Edit app/index.tsx to edit this screen.</Text>
+      <Text>Edit app/index.tsx to edit this screen. souad was here</Text>
       <Link href="/login">
         Login
       </Link>
