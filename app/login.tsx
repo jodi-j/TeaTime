@@ -13,29 +13,63 @@ import { Input, InputField } from "@/components/ui/input"
 import { VStack } from "@/components/ui/vstack"
 import { AlertCircleIcon } from "@/components/ui/icon"
 import { Button, ButtonText } from "@/components/ui/button"
-import React from "react"
+import React, { useState } from "react"
+import { supabase } from '../utils/supabase';
 
-export default function Login () {
+export default function Login() {
   const router = useRouter();
-  const [isInvalid, setIsInvalid] = React.useState(false)
-  const [username, setUsername] = React.useState<string | undefined>(undefined);
-  const [password, setPassword] = React.useState<string | undefined>(undefined);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setError("Please enter both email and password");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      // Login successful, navigate to chat
+      router.push('/(tabs)/chat');
+    } catch (err) {
+      console.error('Login error:', err);
+      setError("Invalid email or password");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <VStack style={{ padding: 24 }}>
       <FormControl
         size="lg"
         isRequired={true}
+        isInvalid={!!error}
       >
         <FormControlLabel>
-          <FormControlLabelText>Username</FormControlLabelText>
+          <FormControlLabelText>Email</FormControlLabelText>
         </FormControlLabel>
         <Input style={{ marginBottom: 16 }}>
           <InputField
             type="text"
-            placeholder="username"
-            value={username}
-            onChangeText={(text) => setUsername(text)}
+            placeholder="email"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
           />
         </Input>
 
@@ -47,12 +81,26 @@ export default function Login () {
             type="password"
             placeholder="password"
             value={password}
-            onChangeText={(text) => setPassword(text)}
+            onChangeText={setPassword}
           />
         </Input>
+
+        {error && (
+          <FormControlError>
+            <FormControlErrorIcon as={AlertCircleIcon} />
+            <FormControlErrorText>{error}</FormControlErrorText>
+          </FormControlError>
+        )}
       </FormControl>
-      <Button size="lg" variant="solid" action="primary" onPress={() => router.push('/(tabs)/chat')}>
-        <ButtonText>Login</ButtonText>
+
+      <Button 
+        size="lg" 
+        variant="solid" 
+        action="primary" 
+        onPress={handleLogin}
+        isDisabled={isLoading}
+      >
+        <ButtonText>{isLoading ? 'Logging in...' : 'Login'}</ButtonText>
       </Button>
     </VStack>
   );

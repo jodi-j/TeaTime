@@ -14,25 +14,35 @@ import { Input, InputField } from "@/components/ui/input";
 import { Button, ButtonText } from "@/components/ui/button";
 import { VStack } from "@/components/ui/vstack";
 import { AlertCircleIcon } from "@/components/ui/icon";
+import { supabase, createUserProfile } from '../utils/supabase';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const [errors, setErrors] = useState({
-    username: "",
+    email: "",
+    displayName: "",
     phone: "",
     password: "",
   });
 
-  const handleSubmit = () => {
-    const newErrors = { username: "", phone: "", password: "" };
+  const handleSubmit = async () => {
+    setIsLoading(true);
+    const newErrors = { email: "", displayName: "", phone: "", password: "" };
     let hasError = false;
 
-    if (!username || username.trim().length < 3) {
-      newErrors.username = "Username must be at least 3 characters";
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = "Please enter a valid email address";
+      hasError = true;
+    }
+
+    if (!displayName || displayName.trim().length < 2) {
+      newErrors.displayName = "Display name must be at least 2 characters";
       hasError = true;
     }
 
@@ -49,13 +59,92 @@ export default function RegisterScreen() {
     setErrors(newErrors);
 
     if (!hasError) {
-      console.log("Submitting:", { username, phone, password });
-      router.push('/login')
+      try {
+        // Register user with Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              display_name: displayName,
+              phone_number: phone,
+            }
+          }
+        });
+
+        if (authError) {
+          if (authError.message.includes('email')) {
+            setErrors(prev => ({ ...prev, email: 'Email already registered' }));
+          } else {
+            throw authError;
+          }
+        } else if (authData.user) {
+          // Create user profile after successful registration
+          await createUserProfile(authData.user.id, displayName);
+          // Registration successful
+          router.push('/login');
+        }
+      } catch (error) {
+        console.error('Registration error:', error);
+        alert('Failed to register. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      setIsLoading(false);
     }
   };
 
   return (
     <VStack style={{ padding: 24 }}>
+      <FormControl isInvalid={!!errors.email} style={{ marginBottom: 16 }}>
+        <FormControlLabel>
+          <FormControlLabelText>Email</FormControlLabelText>
+        </FormControlLabel>
+        <Input>
+          <InputField
+            placeholder="Email"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+          />
+        </Input>
+        {!errors.email ? (
+          <FormControlHelper>
+            <FormControlHelperText>Enter your email address.</FormControlHelperText>
+          </FormControlHelper>
+        ) : (
+          <FormControlError>
+            <FormControlErrorIcon as={AlertCircleIcon} />
+            <FormControlErrorText>{errors.email}</FormControlErrorText>
+          </FormControlError>
+        )}
+      </FormControl>
+
+      <FormControl isInvalid={!!errors.displayName} style={{ marginBottom: 16 }}>
+        <FormControlLabel>
+          <FormControlLabelText>Display Name</FormControlLabelText>
+        </FormControlLabel>
+        <Input>
+          <InputField
+            placeholder="Display Name"
+            value={displayName}
+            onChangeText={setDisplayName}
+          />
+        </Input>
+        {!errors.displayName ? (
+          <FormControlHelper>
+            <FormControlHelperText>This is how others will see you.</FormControlHelperText>
+          </FormControlHelper>
+        ) : (
+          <FormControlError>
+            <FormControlErrorIcon as={AlertCircleIcon} />
+            <FormControlErrorText>{errors.displayName}</FormControlErrorText>
+          </FormControlError>
+        )}
+      </FormControl>
+
       <FormControl isInvalid={!!errors.phone} style={{ marginBottom: 16 }}>
         <FormControlLabel>
           <FormControlLabelText>Phone Number</FormControlLabelText>
@@ -77,29 +166,6 @@ export default function RegisterScreen() {
           <FormControlError>
             <FormControlErrorIcon as={AlertCircleIcon} />
             <FormControlErrorText>{errors.phone}</FormControlErrorText>
-          </FormControlError>
-        )}
-      </FormControl>
-
-      <FormControl isInvalid={!!errors.username} style={{ marginBottom: 16 }}>
-        <FormControlLabel>
-          <FormControlLabelText>Username</FormControlLabelText>
-        </FormControlLabel>
-        <Input>
-          <InputField
-            placeholder="Username"
-            value={username}
-            onChangeText={setUsername}
-          />
-        </Input>
-        {!errors.username ? (
-          <FormControlHelper>
-            <FormControlHelperText>Enter your username.</FormControlHelperText>
-          </FormControlHelper>
-        ) : (
-          <FormControlError>
-            <FormControlErrorIcon as={AlertCircleIcon} />
-            <FormControlErrorText>{errors.username}</FormControlErrorText>
           </FormControlError>
         )}
       </FormControl>
@@ -130,8 +196,8 @@ export default function RegisterScreen() {
         )}
       </FormControl>
 
-      <Button size="lg" onPress={handleSubmit}>
-        <ButtonText>Register Account</ButtonText>
+      <Button size="lg" onPress={handleSubmit} isDisabled={isLoading}>
+        <ButtonText>{isLoading ? 'Registering...' : 'Register Account'}</ButtonText>
       </Button>
     </VStack>
   );
