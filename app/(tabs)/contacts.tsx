@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, FlatList, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, Text, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { Modal, ModalBackdrop, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton } from '@/components/ui/modal';
 import {
@@ -50,6 +51,16 @@ interface ContactResponse {
   };
 }
 
+interface ContactChangePayload {
+  new: {
+    id: string;
+    status: string;
+    user_id: string;
+    contact_id: string;
+  };
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+}
+
 export default function Contacts() {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
@@ -59,6 +70,8 @@ export default function Contacts() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(true);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
 
   useEffect(() => {
     const getUser = async () => {
@@ -70,7 +83,37 @@ export default function Contacts() {
 
   useEffect(() => {
     loadContacts();
+    setupRealTimeSubscriptions();
   }, []);
+
+  const setupRealTimeSubscriptions = () => {
+    const subscription = supabase
+      .channel('contacts_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'contacts',
+          filter: `user_id=eq.${currentUser}`
+        },
+        (payload: any) => {
+          const contactChange = payload as ContactChangePayload;
+          loadContacts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadContacts();
+    setRefreshing(false);
+  };
 
   const loadContacts = async () => {
     try {
@@ -237,45 +280,99 @@ export default function Contacts() {
     }
   };
 
+  const handleDeleteContact = async (contact: Contact) => {
+    Alert.alert(
+      'Delete Contact',
+      `Are you sure you want to delete ${contact.user_profiles.display_name}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => {
+            swipeableRefs.current[contact.id]?.close();
+          }
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('contacts')
+                .delete()
+                .eq('id', contact.id);
+
+              if (error) throw error;
+              
+              loadContacts();
+            } catch (error) {
+              console.error('Error deleting contact:', error);
+              Alert.alert('Error', 'Failed to delete contact. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const renderRightActions = (contact: Contact) => {
+    return (
+      <View style={styles.deleteAction}>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => handleDeleteContact(contact)}
+        >
+          <Text style={styles.deleteButtonText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const renderContact = ({ item }: { item: Contact }) => {
     const isSender = item.user_id === currentUser;
     const isPending = item.status === 'pending';
 
     return (
-      <TouchableOpacity 
-        style={styles.contactItem}
-        onPress={() => {
-          if (item.status === 'accepted') {
-            router.push(`/chat/${item.user_profiles.user_id}`);
-          }
-        }}
+      <Swipeable
+        ref={ref => swipeableRefs.current[item.id] = ref}
+        renderRightActions={() => renderRightActions(item)}
+        rightThreshold={40}
       >
-        <Text style={styles.contactName}>{item.user_profiles.display_name}</Text>
-        {isPending && (
-          <View style={styles.statusContainer}>
-            {isSender ? (
-              <TouchableOpacity onPress={() => handleCancelRequest(item)}>
-                <Text style={styles.cancelButton}>Cancel Request</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.requestButtons}>
-                <TouchableOpacity 
-                  style={[styles.requestButton, styles.acceptButton]}
-                  onPress={() => handleAcceptRequest(item)}
-                >
-                  <Text style={styles.acceptButtonText}>Accept</Text>
+        <TouchableOpacity 
+          style={styles.contactItem}
+          onPress={() => {
+            if (item.status === 'accepted') {
+              router.push(`/chat/${item.user_profiles.user_id}`);
+            }
+          }}
+        >
+          <Text style={styles.contactName}>{item.user_profiles.display_name}</Text>
+          {isPending && (
+            <View style={styles.statusContainer}>
+              {isSender ? (
+                <TouchableOpacity onPress={() => handleCancelRequest(item)}>
+                  <Text style={styles.cancelButton}>Cancel Request</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.requestButton, styles.declineButton]}
-                  onPress={() => handleDeclineRequest(item)}
-                >
-                  <Text style={styles.declineButtonText}>Decline</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-      </TouchableOpacity>
+              ) : (
+                <View style={styles.requestButtons}>
+                  <TouchableOpacity 
+                    style={[styles.requestButton, styles.acceptButton]}
+                    onPress={() => handleAcceptRequest(item)}
+                  >
+                    <Text style={styles.acceptButtonText}>Accept</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.requestButton, styles.declineButton]}
+                    onPress={() => handleDeclineRequest(item)}
+                  >
+                    <Text style={styles.declineButtonText}>Decline</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+        </TouchableOpacity>
+      </Swipeable>
     );
   };
 
@@ -295,6 +392,12 @@ export default function Contacts() {
           data={contacts}
           renderItem={renderContact}
           keyExtractor={item => item.id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+            />
+          }
           ListEmptyComponent={
             <Text style={styles.emptyText}>No contacts yet</Text>
           }
@@ -445,5 +548,21 @@ const styles = StyleSheet.create({
   cancelButton: {
     color: '#EF4444',
     fontSize: 14,
+  },
+  deleteAction: {
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 100,
+  },
+  deleteButton: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
 });
