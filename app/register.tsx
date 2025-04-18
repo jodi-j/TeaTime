@@ -15,6 +15,7 @@ import { Button, ButtonText } from "@/components/ui/button";
 import { VStack } from "@/components/ui/vstack";
 import { AlertCircleIcon } from "@/components/ui/icon";
 import { supabase, createUserProfile } from '../utils/supabase';
+import { Alert } from "react-native";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -81,8 +82,18 @@ export default function RegisterScreen() {
         } else if (authData.user) {
           // Create user profile after successful registration
           await createUserProfile(authData.user.id, displayName);
-          // Registration successful
-          router.push('/login');
+          
+          // Show alert instead of modal
+          Alert.alert(
+            'Registration Successful!',
+            `Please check your email (${email}) for a verification link. You must verify your email before you can log in.`,
+            [
+              {
+                text: 'Go to Login',
+                onPress: () => router.push('/login')
+              }
+            ]
+          );
         }
       } catch (error) {
         console.error('Registration error:', error);
