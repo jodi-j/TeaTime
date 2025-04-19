@@ -13,6 +13,7 @@ import {
   SafeAreaView,
 } from "react-native";
 import { supabase } from "../../utils/supabase";
+import { encryptMessage, decryptMessage } from "../../utils/crypto";
 
 type Message = {
   id: number;
@@ -64,21 +65,53 @@ export default function ChatScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      console.log('Getting user private key...');
+      const { data: userProfile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('private_key')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+      if (!userProfile?.private_key) throw new Error('Private key not found');
+      console.log('User private key:', userProfile.private_key);
+
+      console.log('Loading messages from database...');
       const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-        .or(`sender_id.eq.${id},receiver_id.eq.${id}`)
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${user.id})`)
         .order('timestamp', { ascending: true });
 
       if (error) throw error;
       if (data) {
-        const formattedMessages: Message[] = data.map(msg => ({
-          id: msg.id,
-          text: msg.encrypted_message,
-          sender: msg.sender_id === user.id ? 'me' : 'other',
-          timestamp: msg.timestamp,
-        }));
+        console.log('Raw messages from database:', data);
+        const formattedMessages: Message[] = await Promise.all(
+          data.map(async (msg) => {
+            const isSender = msg.sender_id === user.id;
+            try {
+              const decryptedMessage = await decryptMessage(
+                msg.encrypted_message,
+                userProfile.private_key
+              );
+              return {
+                id: msg.id,
+                text: decryptedMessage,
+                sender: isSender ? 'me' : 'other',
+                timestamp: msg.timestamp,
+              };
+            } catch (err) {
+              console.error('Decryption failed for message:', msg.id, err);
+              return {
+                id: msg.id,
+                text: 'Unable to decrypt message',
+                sender: isSender ? 'me' : 'other',
+                timestamp: msg.timestamp,
+              };
+            }
+          })
+        );
+        console.log('Formatted messages:', formattedMessages);
         setMessages(formattedMessages);
       }
     } catch (error) {
@@ -116,6 +149,26 @@ export default function ChatScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      console.log('Getting recipient private key...');
+      const { data: recipientProfile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('private_key')
+        .eq('user_id', id)
+        .single();
+
+      if (profileError) throw profileError;
+      if (!recipientProfile?.private_key) throw new Error('Recipient public key not found');
+      console.log('Recipient public key:', recipientProfile.private_key);
+
+      console.log('Encrypting message...');
+      const encryptedMessage = await encryptMessage(inputText, recipientProfile.private_key);
+      console.log('Message details:', {
+        original: inputText,
+        encrypted: encryptedMessage,
+        recipient_id: id,
+        recipient_private_key: recipientProfile.private_key
+      });
+
       const newMessage: Message = {
         id: tempId,
         text: inputText,
@@ -125,13 +178,14 @@ export default function ChatScreen() {
       setMessages(prev => [...prev, newMessage]);
       setInputText("");
 
+      console.log('Saving message to database...');
       const { data, error } = await supabase
         .from('messages')
         .insert([
           {
             sender_id: user.id,
             receiver_id: id,
-            encrypted_message: inputText,
+            encrypted_message: encryptedMessage,
           }
         ])
         .select()
@@ -140,6 +194,7 @@ export default function ChatScreen() {
       if (error) throw error;
 
       if (data) {
+        console.log('Message saved successfully:', data);
         setMessages(prev => prev.map(msg => 
           msg.id === tempId 
             ? { ...msg, id: data.id, timestamp: data.timestamp }
