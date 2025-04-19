@@ -12,84 +12,193 @@ import {
   Image,
   SafeAreaView,
 } from "react-native";
-import { mockChats } from "../mockData";
+import { supabase } from "../../utils/supabase";
+
+type Message = {
+  id: number;
+  text: string;
+  sender: string;
+  timestamp: string;
+};
 
 export default function ChatScreen() {
-    const { id } = useLocalSearchParams();
-    const navigation = useNavigation();
-  
-    const chat = mockChats.find((chat) => chat.id === id);
-  
-    const [messages, setMessages] = useState([
-      { id: 'init', text: chat?.lastMessage ?? 'Hello!', sender: 'other' },
-    ]);
-    const [inputText, setInputText] = useState("");
-  
-    useEffect(() => {
-      navigation.setOptions({
-        title: chat ? chat.name : `Chat with ${id}`,
-        headerBackTitle: "Chat",
-      });
-    }, [id]);
-  
-    const sendMessage = () => {
-      if (inputText.trim() === "") return;
-      const newMessage = {
-        id: Date.now().toString(),
+  const { id } = useLocalSearchParams();
+  const navigation = useNavigation();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [contactAvatar, setContactAvatar] = useState("https://randomuser.me/api/portraits/women/44.jpg");
+
+  useEffect(() => {
+    loadContactInfo();
+    loadMessages();
+    setupRealtimeSubscription();
+  }, [id]);
+
+  const loadContactInfo = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('display_name')
+        .eq('user_id', id)
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setContactName(data.display_name);
+        navigation.setOptions({
+          title: data.display_name,
+          headerBackTitle: "Chat",
+        });
+      }
+    } catch (error) {
+      console.error('Error loading contact info:', error);
+    }
+  };
+
+  const loadMessages = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .or(`sender_id.eq.${id},receiver_id.eq.${id}`)
+        .order('timestamp', { ascending: true });
+
+      if (error) throw error;
+      if (data) {
+        const formattedMessages: Message[] = data.map(msg => ({
+          id: msg.id,
+          text: msg.encrypted_message,
+          sender: msg.sender_id === user.id ? 'me' : 'other',
+          timestamp: msg.timestamp,
+        }));
+        setMessages(formattedMessages);
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    }
+  };
+
+  const setupRealtimeSubscription = () => {
+    const subscription = supabase
+      .channel('messages')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          loadMessages();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  };
+
+  const sendMessage = async () => {
+    if (inputText.trim() === "") return;
+
+    const tempId = Date.now();
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const newMessage: Message = {
+        id: tempId,
         text: inputText,
         sender: 'me',
+        timestamp: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, newMessage]);
+      setMessages(prev => [...prev, newMessage]);
       setInputText("");
-    };
-  
-    const renderItem = ({ item }: { item: typeof messages[0] }) => (
-      <View
-        style={[
-          styles.messageBubble,
-          item.sender === "me" ? styles.myMessage : styles.theirMessage,
-        ]}
-      >
-        <Text style={styles.messageText}>{item.text}</Text>
-      </View>
-    );
-  
-    return (
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 0}
-      >
-        <SafeAreaView style={styles.container}>
-          <View style={styles.header}>
-            <Image source={{ uri: chat?.avatar }} style={styles.avatar} />
-            <Text style={styles.chatName}>{chat?.name}</Text>
+
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([
+          {
+            sender_id: user.id,
+            receiver_id: id,
+            encrypted_message: inputText,
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setMessages(prev => prev.map(msg => 
+          msg.id === tempId 
+            ? { ...msg, id: data.id, timestamp: data.timestamp }
+            : msg
+        ));
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setMessages(prev => prev.filter(msg => msg.id !== tempId));
+    }
+  };
+
+  const renderItem = ({ item }: { item: Message }) => (
+    <View
+      style={[
+        styles.messageBubble,
+        item.sender === "me" ? styles.myMessage : styles.theirMessage,
+      ]}
+    >
+      <Text style={styles.messageText}>{item.text}</Text>
+    </View>
+  );
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 0}
+    >
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Image source={{ uri: contactAvatar }} style={styles.avatar} />
+          <Text style={styles.chatName}>{contactName}</Text>
+        </View>
+
+        <FlatList
+          data={messages}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderItem}
+          contentContainerStyle={styles.messageList}
+        />
+
+        <View style={styles.inputWrapper}>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Type your message..."
+              value={inputText}
+              onChangeText={setInputText}
+            />
+            <TouchableOpacity onPress={sendMessage} style={styles.sendButton}>
+              <Text style={{ color: "white" }}>Send</Text>
+            </TouchableOpacity>
           </View>
-  
-          <FlatList
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            contentContainerStyle={styles.messageList}
-          />
-  
-          <View style={styles.inputWrapper}>
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Type your message..."
-                value={inputText}
-                onChangeText={setInputText}
-              />
-              <TouchableOpacity onPress={sendMessage} style={styles.sendButton}>
-                <Text style={{ color: "white" }}>Send</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
-    );
-  }  
+        </View>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
+  );
+}
 
 const styles = StyleSheet.create({
   container: { 
