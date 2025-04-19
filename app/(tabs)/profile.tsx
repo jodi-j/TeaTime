@@ -1,14 +1,17 @@
-import { Text, View, StyleSheet } from "react-native";
+import { Text, View, StyleSheet, Share } from "react-native";
 import { useEffect, useState } from "react";
 import { supabase } from "../../utils/supabase";
 import { VStack } from "@/components/ui/vstack";
 import { Avatar, AvatarImage, AvatarFallbackText } from "@/components/ui/avatar";
+import { Button, ButtonText } from "@/components/ui/button";
+import QRCode from 'react-native-qrcode-svg';
 
 interface UserProfile {
   display_name: string;
   user_id: string;
   email?: string;
   phone_number?: string;
+  qr_code_id: string;
 }
 
 export default function Profile() {
@@ -48,6 +51,19 @@ export default function Profile() {
 
     fetchUserProfile();
   }, []);
+
+  const handleShareQRCode = async () => {
+    if (!userProfile?.qr_code_id) return;
+
+    try {
+      await Share.share({
+        message: `Add me on TeaTime! My QR Code ID: ${userProfile.qr_code_id}`,
+        title: 'Share QR Code ID'
+      });
+    } catch (error) {
+      console.error('Error sharing QR code:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -90,6 +106,25 @@ export default function Profile() {
             <Text style={styles.value}>{userProfile.phone_number}</Text>
           </View>
         )}
+
+        <View style={styles.infoContainer}>
+          <Text style={styles.label}>QR Code</Text>
+          <View style={styles.qrCodeContainer}>
+            <QRCode
+              value={userProfile.qr_code_id}
+              size={200}
+              backgroundColor="white"
+              color="black"
+            />
+          </View>
+          <Button 
+            variant="outline" 
+            style={styles.shareButton}
+            onPress={handleShareQRCode}
+          >
+            <ButtonText>Share QR Code ID</ButtonText>
+          </Button>
+        </View>
       </VStack>
     </View>
   );
@@ -122,5 +157,16 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 16,
     fontWeight: '500',
+    marginBottom: 10,
+  },
+  shareButton: {
+    marginTop: 10,
+  },
+  qrCodeContainer: {
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: 'white',
+    borderRadius: 10,
+    marginBottom: 10,
   },
 });
