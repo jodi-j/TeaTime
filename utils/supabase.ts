@@ -19,6 +19,44 @@ export const supabase = createClient(
     },
   })
 
+export const migrateUserKeys = async (userId: string) => {
+  try {
+    // Get the user's current keys
+    const { data: userProfile, error: fetchError } = await supabase
+      .from('user_profiles')
+      .select('public_key, private_key')
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Check if the keys are already in the new format
+    if (userProfile?.public_key?.includes('BEGIN PUBLIC KEY') || 
+        userProfile?.private_key?.includes('BEGIN PRIVATE KEY')) {
+      return; // Keys are already in the new format
+    }
+
+    // Generate new RSA keys
+    const { publicKey, privateKey } = await generateKeyPair();
+
+    // Update the user's keys
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({
+        public_key: publicKey,
+        private_key: privateKey,
+      })
+      .eq('user_id', userId);
+
+    if (updateError) throw updateError;
+
+    console.log('Successfully migrated keys for user:', userId);
+  } catch (error) {
+    console.error('Error migrating user keys:', error);
+    throw error;
+  }
+};
+
 export const createUserProfile = async (userId: string, displayName: string) => {
   try {
     const qrCodeId = Crypto.randomUUID()

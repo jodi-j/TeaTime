@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer';
+import forge from 'node-forge';
 
 const stringToArrayBuffer = (str: string): ArrayBuffer => {
   const buffer = Buffer.from(str, 'utf-8');
@@ -32,29 +33,35 @@ export const generateKeyPair = async (): Promise<{
   privateKey: string;
 }> => {
   try {
-    const publicKey = generateRandomString(32);
+    const keypair = forge.pki.rsa.generateKeyPair({ bits: 2048, workers: 2 });
     
-    const privateKey = generateRandomString(32);
+    const publicKey = forge.pki.publicKeyToPem(keypair.publicKey);
+    const privateKey = forge.pki.privateKeyToPem(keypair.privateKey);
 
-    return { publicKey, privateKey };
+    return {
+      publicKey: forge.util.encode64(publicKey),
+      privateKey: forge.util.encode64(privateKey),
+    };
   } catch (error) {
     console.error('Error generating key pair:', error);
     throw error;
   }
 };
 
-export const importPublicKey = async (base64Key: string): Promise<string> => {
+export const importPublicKey = async (base64Key: string): Promise<forge.pki.rsa.PublicKey> => {
   try {
-    return base64Key;
+    const pem = forge.util.decode64(base64Key);
+    return forge.pki.publicKeyFromPem(pem);
   } catch (error) {
     console.error('Error importing public key:', error);
     throw error;
   }
 };
 
-export const importPrivateKey = async (base64Key: string): Promise<string> => {
+export const importPrivateKey = async (base64Key: string): Promise<forge.pki.rsa.PrivateKey> => {
   try {
-    return base64Key;
+    const pem = forge.util.decode64(base64Key);
+    return forge.pki.privateKeyFromPem(pem);
   } catch (error) {
     console.error('Error importing private key:', error);
     throw error;
@@ -70,26 +77,20 @@ export const encryptMessage = async (
   recipientPublicKey: string
 ): Promise<string> => {
   try {
-    const messageBuffer = stringToArrayBuffer(message);
-    const keyBuffer = stringToArrayBuffer(recipientPublicKey);
+    const publicKey = await importPublicKey(recipientPublicKey);
     
-    const encryptedBuffer = new ArrayBuffer(messageBuffer.byteLength);
-    const encryptedView = new Uint8Array(encryptedBuffer);
-    const messageView = new Uint8Array(messageBuffer);
-    const keyView = new Uint8Array(keyBuffer);
+    // Convert message to bytes
+    const messageBytes = forge.util.encodeUtf8(message);
     
-    for (let i = 0; i < messageBuffer.byteLength; i++) {
-      const keyByte = keyView[i % keyBuffer.byteLength];
-      const messageByte = messageView[i];
-      
-      let encryptedByte = messageByte ^ keyByte;
-      
-      encryptedByte = (encryptedByte + keyByte) % 256;
-      
-      encryptedView[i] = encryptedByte;
-    }
+    // Encrypt using RSA-OAEP
+    const encrypted = publicKey.encrypt(messageBytes, 'RSA-OAEP', {
+      md: forge.md.sha256.create(),
+      mgf1: {
+        md: forge.md.sha256.create()
+      }
+    });
     
-    return arrayBufferToBase64(encryptedBuffer);
+    return forge.util.encode64(encrypted);
   } catch (error) {
     console.error('Error encrypting message:', error);
     throw error;
@@ -101,26 +102,19 @@ export const decryptMessage = async (
   privateKey: string
 ): Promise<string> => {
   try {
-    const encryptedBuffer = base64ToArrayBuffer(encryptedMessage);
-    const keyBuffer = stringToArrayBuffer(privateKey);
+    const privateKeyObj = await importPrivateKey(privateKey);
+    const encrypted = forge.util.decode64(encryptedMessage);
     
-    const decryptedBuffer = new ArrayBuffer(encryptedBuffer.byteLength);
-    const decryptedView = new Uint8Array(decryptedBuffer);
-    const encryptedView = new Uint8Array(encryptedBuffer);
-    const keyView = new Uint8Array(keyBuffer);
+    // Decrypt using RSA-OAEP
+    const decrypted = privateKeyObj.decrypt(encrypted, 'RSA-OAEP', {
+      md: forge.md.sha256.create(),
+      mgf1: {
+        md: forge.md.sha256.create()
+      }
+    });
     
-    for (let i = 0; i < encryptedBuffer.byteLength; i++) {
-      const keyByte = keyView[i % keyBuffer.byteLength];
-      const encryptedByte = encryptedView[i];
-      
-      let decryptedByte = (encryptedByte - keyByte + 256) % 256;
-      
-      decryptedByte = decryptedByte ^ keyByte;
-      
-      decryptedView[i] = decryptedByte;
-    }
-    
-    return arrayBufferToString(decryptedBuffer);
+    // Convert bytes back to string
+    return forge.util.decodeUtf8(decrypted);
   } catch (error) {
     console.error('Error decrypting message:', error);
     throw error;

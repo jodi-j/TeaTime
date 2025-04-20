@@ -12,7 +12,8 @@ type Message = {
   id: number;
   sender_id: string;
   receiver_id: string;
-  encrypted_message: string;
+  encrypted_message_for_receiver: string;
+  encrypted_message_for_sender: string;
   timestamp: string;
   sender: {
     display_name: string;
@@ -83,7 +84,8 @@ export default function chat() {
           id,
           sender_id,
           receiver_id,
-          encrypted_message,
+          encrypted_message_for_receiver,
+          encrypted_message_for_sender,
           timestamp,
           sender:user_profiles!messages_sender_id_fkey (
             display_name,
@@ -122,7 +124,7 @@ export default function chat() {
               conversationMap.set(partnerId, {
                 id: partnerId,
                 name: partner.display_name,
-                lastMessage: msg.encrypted_message,
+                lastMessage: isSender ? msg.encrypted_message_for_sender : msg.encrypted_message_for_receiver,
                 timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 avatar: "https://randomuser.me/api/portraits/women/44.jpg"
               });
