@@ -11,8 +11,10 @@ import {
   StyleSheet,
   Image,
   SafeAreaView,
+  RefreshControl,
 } from "react-native";
-import { supabase } from "../../utils/supabase";
+import { migrateUserKeys, supabase } from "../../utils/supabase";
+import { encryptMessage, decryptMessage } from "../../utils/crypto";
 
 type Message = {
   id: number;
@@ -28,17 +30,26 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactAvatar, setContactAvatar] = useState("https://randomuser.me/api/portraits/women/44.jpg");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const recipientId = typeof id === 'string' ? id : id[0];
 
   useEffect(() => {
+    console.log('Chat screen mounted with id:', id);
     loadContactInfo();
     loadMessages();
-    setupRealtimeSubscription();
+    const cleanup = setupRealtimeSubscription();
+    return cleanup;
   }, [id]);
 
   const loadContactInfo = async () => {
     try {
+      console.log('Loading contact info for id:', id);
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.log('No authenticated user found');
+        return;
+      }
 
       const { data, error } = await supabase
         .from('user_profiles')
@@ -46,8 +57,12 @@ export default function ChatScreen() {
         .eq('user_id', id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading contact info:', error);
+        throw error;
+      }
       if (data) {
+        console.log('Contact info loaded:', data);
         setContactName(data.display_name);
         navigation.setOptions({
           title: data.display_name,
@@ -61,26 +76,78 @@ export default function ChatScreen() {
 
   const loadMessages = async () => {
     try {
+      console.log('Starting to load messages...');
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.log('No authenticated user found');
+        return;
+      }
 
+      console.log('Loading messages from database...');
       const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-        .or(`sender_id.eq.${id},receiver_id.eq.${id}`)
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${recipientId}),and(sender_id.eq.${recipientId},receiver_id.eq.${user.id})`)
         .order('timestamp', { ascending: true });
 
-      if (error) throw error;
-      if (data) {
-        const formattedMessages: Message[] = data.map(msg => ({
-          id: msg.id,
-          text: msg.encrypted_message,
-          sender: msg.sender_id === user.id ? 'me' : 'other',
-          timestamp: msg.timestamp,
-        }));
-        setMessages(formattedMessages);
+      if (error) {
+        console.error('Error loading messages:', error);
+        throw error;
       }
+
+      console.log('Getting user private key...');
+      const { data: keyProfile, error: keyError } = await supabase
+        .from('user_profiles')
+        .select('private_key')
+        .eq('user_id', user.id)
+        .single();
+
+      if (keyError) {
+        console.error('Error fetching user private key:', keyError);
+        throw keyError;
+      }
+      if (!keyProfile?.private_key) {
+        console.error('Private key not found for user:', user.id);
+        throw new Error('Private key not found');
+      }
+
+      console.log('Processing messages...');
+      const formattedMessages: Message[] = await Promise.all(
+        data.map(async (msg) => {
+          const isIncoming = msg.receiver_id === user.id;
+
+          try {
+            // Decrypt using the appropriate encrypted message
+            console.log('Decrypting message:', msg.id);
+            const encryptedMessage = isIncoming 
+              ? msg.encrypted_message_for_receiver 
+              : msg.encrypted_message_for_sender;
+            
+            const decrypted = await decryptMessage(
+              encryptedMessage,
+              keyProfile.private_key
+            );
+
+            return {
+              id: msg.id,
+              text: decrypted,
+              sender: isIncoming ? 'other' : 'me',
+              timestamp: msg.timestamp,
+            };
+          } catch (err) {
+            console.error('Failed to decrypt message:', msg.id, err);
+            return {
+              id: msg.id,
+              text: 'Unable to decrypt message',
+              sender: isIncoming ? 'other' : 'me',
+              timestamp: msg.timestamp,
+            };
+          }
+        })
+      );
+
+      console.log('Formatted messages:', formattedMessages);
+      setMessages(formattedMessages);
     } catch (error) {
       console.error('Error loading messages:', error);
     }
@@ -108,13 +175,54 @@ export default function ChatScreen() {
   };
 
   const sendMessage = async () => {
-    if (inputText.trim() === "") return;
+    if (inputText.trim() === "") {
+      console.log('Empty message, not sending');
+      return;
+    }
 
+    console.log('Starting to send message:', inputText);
     const tempId = Date.now();
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.log('No authenticated user found');
+        return;
+      }
+
+      // Get both sender's and recipient's public keys
+      console.log('Getting keys...');
+      const [
+        { data: senderProfile, error: senderError },
+        { data: recipientProfile, error: recipientError }
+      ] = await Promise.all([
+        supabase
+          .from('user_profiles')
+          .select('public_key')
+          .eq('user_id', user.id)
+          .single(),
+        supabase
+          .from('user_profiles')
+          .select('public_key')
+          .eq('user_id', recipientId)
+          .single()
+      ]);
+
+      if (senderError || recipientError) {
+        console.error('Error fetching keys:', { senderError, recipientError });
+        throw senderError || recipientError;
+      }
+      if (!senderProfile?.public_key || !recipientProfile?.public_key) {
+        console.error('Public keys not found');
+        throw new Error('Public keys not found');
+      }
+
+      console.log('Encrypting messages...');
+      const [encryptedForReceiver, encryptedForSender] = await Promise.all([
+        encryptMessage(inputText, recipientProfile.public_key),
+        encryptMessage(inputText, senderProfile.public_key)
+      ]);
+      console.log('Messages encrypted successfully');
 
       const newMessage: Message = {
         id: tempId,
@@ -122,24 +230,31 @@ export default function ChatScreen() {
         sender: 'me',
         timestamp: new Date().toISOString(),
       };
+      console.log('Adding message to UI:', newMessage);
       setMessages(prev => [...prev, newMessage]);
       setInputText("");
 
+      console.log('Saving message to database...');
       const { data, error } = await supabase
         .from('messages')
         .insert([
           {
             sender_id: user.id,
-            receiver_id: id,
-            encrypted_message: inputText,
+            receiver_id: recipientId,
+            encrypted_message_for_receiver: encryptedForReceiver,
+            encrypted_message_for_sender: encryptedForSender,
           }
         ])
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error saving message:', error);
+        throw error;
+      }
 
       if (data) {
+        console.log('Message saved successfully:', data);
         setMessages(prev => prev.map(msg => 
           msg.id === tempId 
             ? { ...msg, id: data.id, timestamp: data.timestamp }
@@ -163,6 +278,17 @@ export default function ChatScreen() {
     </View>
   );
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadMessages();
+    } catch (error) {
+      console.error('Error refreshing messages:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -180,6 +306,16 @@ export default function ChatScreen() {
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderItem}
           contentContainerStyle={styles.messageList}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#000"
+              title="Pull to refresh"
+              titleColor="#666"
+            />
+          }
+          inverted={false}
         />
 
         <View style={styles.inputWrapper}>

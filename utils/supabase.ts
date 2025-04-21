@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
 import * as Crypto from 'expo-crypto'
+import { generateKeyPair } from './crypto'
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!
@@ -18,15 +19,48 @@ export const supabase = createClient(
     },
   })
 
-// Function to create user profile
+export const migrateUserKeys = async (userId: string) => {
+  try {
+    // Get the user's current keys
+    const { data: userProfile, error: fetchError } = await supabase
+      .from('user_profiles')
+      .select('public_key, private_key')
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Check if the keys are already in the new format
+    if (userProfile?.public_key?.includes('BEGIN PUBLIC KEY') || 
+        userProfile?.private_key?.includes('BEGIN PRIVATE KEY')) {
+      return; // Keys are already in the new format
+    }
+
+    // Generate new RSA keys
+    const { publicKey, privateKey } = await generateKeyPair();
+
+    // Update the user's keys
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({
+        public_key: publicKey,
+        private_key: privateKey,
+      })
+      .eq('user_id', userId);
+
+    if (updateError) throw updateError;
+
+    console.log('Successfully migrated keys for user:', userId);
+  } catch (error) {
+    console.error('Error migrating user keys:', error);
+    throw error;
+  }
+};
+
 export const createUserProfile = async (userId: string, displayName: string) => {
   try {
-    // Generate QR code ID and public key
     const qrCodeId = Crypto.randomUUID()
-    const publicKeyBytes = await Crypto.getRandomBytesAsync(32)
-    const publicKey = Array.from(publicKeyBytes)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
+    const { publicKey, privateKey } = await generateKeyPair()
 
     const { error } = await supabase
       .from('user_profiles')
@@ -35,12 +69,13 @@ export const createUserProfile = async (userId: string, displayName: string) => 
           user_id: userId,
           display_name: displayName,
           public_key: publicKey,
+          private_key: privateKey,
           qr_code_id: qrCodeId,
         }
       ])
 
     if (error) throw error
-    return { qrCodeId, publicKey }
+    return { qrCodeId, publicKey, privateKey }
   } catch (error) {
     console.error('Error creating user profile:', error)
     throw error
