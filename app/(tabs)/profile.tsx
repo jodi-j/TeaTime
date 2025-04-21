@@ -1,8 +1,8 @@
-import { Text, View, StyleSheet, Share } from "react-native";
+import { Text, View, StyleSheet, Share, SafeAreaView, ScrollView } from "react-native";
 import { useEffect, useState } from "react";
 import { supabase } from "../../utils/supabase";
 import { VStack } from "@/components/ui/vstack";
-import { Avatar, AvatarImage, AvatarFallbackText } from "@/components/ui/avatar";
+import { Avatar, AvatarFallbackText, AvatarImage } from "@/components/ui/avatar";
 import { Button, ButtonText } from "@/components/ui/button";
 import QRCode from 'react-native-qrcode-svg';
 
@@ -12,6 +12,7 @@ interface UserProfile {
   email?: string;
   phone_number?: string;
   qr_code_id: string;
+  profile_picture?: string;
 }
 
 export default function Profile() {
@@ -21,11 +22,9 @@ export default function Profile() {
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        // Get the current user
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Get user profile from user_profiles table
         const { data: profile, error } = await supabase
           .from('user_profiles')
           .select('*')
@@ -34,7 +33,6 @@ export default function Profile() {
 
         if (error) throw error;
 
-        // Get phone number and email from auth metadata
         const phoneNumber = user.user_metadata?.phone_number;
         
         setUserProfile({
@@ -82,51 +80,59 @@ export default function Profile() {
   }
 
   return (
-    <View style={styles.container}>
-      <VStack space="md" style={styles.content}>
-        <Avatar size="xl" style={styles.avatar}>
-          <AvatarFallbackText>
-            {userProfile.display_name.charAt(0).toUpperCase()}
-          </AvatarFallbackText>
-        </Avatar>
+    <SafeAreaView>
+      <ScrollView style={{height: "100%"}}>
+        <View style={styles.container}>
+          <VStack space="md" style={styles.content}>
+            <Avatar size="xl" style={styles.avatar}>
+              {userProfile.profile_picture ? (
+                <AvatarImage source={{ uri: userProfile.profile_picture }} />
+              ) : (
+                <AvatarFallbackText>
+                  {userProfile.display_name.charAt(0).toUpperCase()}
+                </AvatarFallbackText>
+              )}
+            </Avatar>
 
-        <View style={styles.infoContainer}>
-          <Text style={styles.label}>Display Name</Text>
-          <Text style={styles.value}>{userProfile.display_name}</Text>
+            <View style={styles.infoContainer}>
+              <Text style={styles.label}>Display Name</Text>
+              <Text style={styles.value}>{userProfile.display_name}</Text>
+            </View>
+
+            <View style={styles.infoContainer}>
+              <Text style={styles.label}>Email</Text>
+              <Text style={styles.value}>{userProfile.email}</Text>
+            </View>
+
+            {userProfile.phone_number && (
+              <View style={styles.infoContainer}>
+                <Text style={styles.label}>Phone Number</Text>
+                <Text style={styles.value}>{userProfile.phone_number}</Text>
+              </View>
+            )}
+
+            <View style={styles.infoContainer}>
+              <Text style={styles.label}>QR Code</Text>
+              <View style={styles.qrCodeContainer}>
+                <QRCode
+                  value={userProfile.qr_code_id}
+                  size={200}
+                  backgroundColor="white"
+                  color="black"
+                />
+              </View>
+              <Button 
+                variant="outline" 
+                style={styles.shareButton}
+                onPress={handleShareQRCode}
+              >
+                <ButtonText>Share QR Code ID</ButtonText>
+              </Button>
+            </View>
+          </VStack>
         </View>
-
-        <View style={styles.infoContainer}>
-          <Text style={styles.label}>Email</Text>
-          <Text style={styles.value}>{userProfile.email}</Text>
-        </View>
-
-        {userProfile.phone_number && (
-          <View style={styles.infoContainer}>
-            <Text style={styles.label}>Phone Number</Text>
-            <Text style={styles.value}>{userProfile.phone_number}</Text>
-          </View>
-        )}
-
-        <View style={styles.infoContainer}>
-          <Text style={styles.label}>QR Code</Text>
-          <View style={styles.qrCodeContainer}>
-            <QRCode
-              value={userProfile.qr_code_id}
-              size={200}
-              backgroundColor="white"
-              color="black"
-            />
-          </View>
-          <Button 
-            variant="outline" 
-            style={styles.shareButton}
-            onPress={handleShareQRCode}
-          >
-            <ButtonText>Share QR Code ID</ButtonText>
-          </Button>
-        </View>
-      </VStack>
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -146,7 +152,7 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 15,
     padding: 15,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'rgba(207, 166, 153, 0.5)',
     borderRadius: 10,
   },
   label: {
@@ -157,7 +163,6 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 16,
     fontWeight: '500',
-    marginBottom: 10,
   },
   shareButton: {
     marginTop: 10,

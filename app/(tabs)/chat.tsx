@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { FlatList, TouchableOpacity, Text, View, StyleSheet } from "react-native";
 import { VStack } from "@/components/ui/vstack";
 import { HStack } from "@/components/ui/hstack";
-import { Avatar, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallbackText } from "@/components/ui/avatar"
 import { Button, ButtonText } from "@/components/ui/button";
 import { Modal, ModalBackdrop, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton } from '@/components/ui/modal';
 import { useRouter } from "expo-router";
@@ -231,22 +231,22 @@ export default function chat() {
   };
 
   const renderItem = ({ item }: { item: Conversation }) => (
-    <TouchableOpacity onPress={() => router.push({ pathname: "/[id]", params: { id: item.id } } as never)}>
+    <TouchableOpacity onPress={() => router.push({ pathname: "/[id]", params: { id: item.id } } as never)} style={{margin: 4}}>
       <HStack
         space="md"
-        style={{ alignItems: 'center', padding: 4, borderBottomWidth: 1 }}
+        style={{ alignItems: 'center', padding: 10, borderBottomWidth: 1 }}
       >
-        <Avatar size="md">
-          <AvatarImage source={{ uri: item.avatar }} />
+        <Avatar size="lg" style={{marginRight: 6, backgroundColor: "#dca65e"}}>
+          <AvatarFallbackText>{item.name[0]}</AvatarFallbackText>
         </Avatar>
         <VStack style={{ flex: 1 }}>
           <HStack style={{justifyContent:"space-between"}}>
-            <Text style={{fontWeight:"bold"}}>{item.name}</Text>
-            <Text>
+            <Text style={{fontWeight:"bold", fontSize: 20, marginBottom: 4}}>{item.name}</Text>
+            <Text style={{fontSize: 16}}>
               {item.timestamp}
             </Text>
           </HStack>
-          <Text numberOfLines={1}>
+          <Text numberOfLines={1} style={{fontSize: 18}}>
             {item.lastMessage}
           </Text>
         </VStack>

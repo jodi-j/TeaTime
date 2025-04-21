@@ -81,4 +81,40 @@ export const createUserProfile = async (userId: string, displayName: string) => 
     throw error
   }
 }
+
+export const uploadProfilePicture = async (userId: string, uri: string) => {
+  try {
+    // Convert the image to a blob
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from('profile-pictures')
+      .upload(`${userId}/avatar.jpg`, blob, {
+        contentType: 'image/jpeg',
+        upsert: true
+      });
+
+    if (error) throw error;
+
+    // Get the public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('profile-pictures')
+      .getPublicUrl(`${userId}/avatar.jpg`);
+
+    // Update the user profile with the new picture URL
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({ profile_picture: publicUrl })
+      .eq('user_id', userId);
+
+    if (updateError) throw updateError;
+
+    return publicUrl;
+  } catch (error) {
+    console.error('Error uploading profile picture:', error);
+    throw error;
+  }
+};
         

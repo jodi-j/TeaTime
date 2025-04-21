@@ -15,7 +15,8 @@ import { Button, ButtonText } from "@/components/ui/button";
 import { VStack } from "@/components/ui/vstack";
 import { AlertCircleIcon } from "@/components/ui/icon";
 import { supabase, createUserProfile } from '../utils/supabase';
-import { Alert } from "react-native";
+import { Alert, StyleSheet, ScrollView, Pressable, Text, SafeAreaView } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -61,7 +62,6 @@ export default function RegisterScreen() {
 
     if (!hasError) {
       try {
-        // Register user with Supabase Auth
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password,
@@ -80,10 +80,8 @@ export default function RegisterScreen() {
             throw authError;
           }
         } else if (authData.user) {
-          // Create user profile after successful registration
           await createUserProfile(authData.user.id, displayName);
           
-          // Show alert instead of modal
           Alert.alert(
             'Registration Successful!',
             `Please check your email (${email}) for a verification link. You must verify your email before you can log in.`,
@@ -107,109 +105,127 @@ export default function RegisterScreen() {
   };
 
   return (
-    <VStack style={{ padding: 24 }}>
-      <FormControl isInvalid={!!errors.email} style={{ marginBottom: 16 }}>
-        <FormControlLabel>
-          <FormControlLabelText>Email</FormControlLabelText>
-        </FormControlLabel>
-        <Input>
-          <InputField
-            placeholder="Email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
-        </Input>
-        {!errors.email ? (
-          <FormControlHelper>
-            <FormControlHelperText>Enter your email address.</FormControlHelperText>
-          </FormControlHelper>
-        ) : (
-          <FormControlError>
-            <FormControlErrorIcon as={AlertCircleIcon} />
-            <FormControlErrorText>{errors.email}</FormControlErrorText>
-          </FormControlError>
-        )}
-      </FormControl>
+    <SafeAreaView>
+      <ScrollView style={{height: "100%"}}>
+        <VStack style={{ padding: 24 }}>
+        <Pressable style={{flexDirection: "row", marginBottom: 12, alignItems: "center"}} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={22} style={{color: "#c49a8c"}}/>
+          <Text style={{ fontSize: 16, color: "#c49a8c", fontWeight: "bold" }}>Back</Text>
+        </Pressable>
 
-      <FormControl isInvalid={!!errors.displayName} style={{ marginBottom: 16 }}>
-        <FormControlLabel>
-          <FormControlLabelText>Display Name</FormControlLabelText>
-        </FormControlLabel>
-        <Input>
-          <InputField
-            placeholder="Display Name"
-            value={displayName}
-            onChangeText={setDisplayName}
-          />
-        </Input>
-        {!errors.displayName ? (
-          <FormControlHelper>
-            <FormControlHelperText>This is how others will see you.</FormControlHelperText>
-          </FormControlHelper>
-        ) : (
-          <FormControlError>
-            <FormControlErrorIcon as={AlertCircleIcon} />
-            <FormControlErrorText>{errors.displayName}</FormControlErrorText>
-          </FormControlError>
-        )}
-      </FormControl>
+        <Text style={{fontSize: 36, color: "#c49a8c", fontWeight: "bold", marginBottom: 12, alignSelf: "center"}}>Register</Text>
 
-      <FormControl isInvalid={!!errors.phone} style={{ marginBottom: 16 }}>
-        <FormControlLabel>
-          <FormControlLabelText>Phone Number</FormControlLabelText>
-        </FormControlLabel>
-        <Input>
-          <InputField
-            placeholder="Phone Number"
-            keyboardType="number-pad"
-            value={phone}
-            onChangeText={setPhone}
-            maxLength={10}
-          />
-        </Input>
-        {!errors.phone ? (
-          <FormControlHelper>
-            <FormControlHelperText>10-digit number only.</FormControlHelperText>
-          </FormControlHelper>
-        ) : (
-          <FormControlError>
-            <FormControlErrorIcon as={AlertCircleIcon} />
-            <FormControlErrorText>{errors.phone}</FormControlErrorText>
-          </FormControlError>
-        )}
-      </FormControl>
+          <FormControl isInvalid={!!errors.email} style={styles.form}>
+            <FormControlLabel>
+              <FormControlLabelText>Email</FormControlLabelText>
+            </FormControlLabel>
+            <Input>
+              <InputField
+                placeholder="Email"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+              />
+            </Input>
+            {!errors.email ? (
+              <FormControlHelper>
+                <FormControlHelperText>Enter your email address.</FormControlHelperText>
+              </FormControlHelper>
+            ) : (
+              <FormControlError>
+                <FormControlErrorIcon as={AlertCircleIcon} />
+                <FormControlErrorText>{errors.email}</FormControlErrorText>
+              </FormControlError>
+            )}
+          </FormControl>
 
-      <FormControl isInvalid={!!errors.password} style={{ marginBottom: 16 }}>
-        <FormControlLabel>
-          <FormControlLabelText>Password</FormControlLabelText>
-        </FormControlLabel>
-        <Input>
-          <InputField
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-          />
-        </Input>
-        {!errors.password ? (
-          <FormControlHelper>
-            <FormControlHelperText>
-              Must be at least 6 characters.
-            </FormControlHelperText>
-          </FormControlHelper>
-        ) : (
-          <FormControlError>
-            <FormControlErrorIcon as={AlertCircleIcon} />
-            <FormControlErrorText>{errors.password}</FormControlErrorText>
-          </FormControlError>
-        )}
-      </FormControl>
+          <FormControl isInvalid={!!errors.displayName} style={styles.form}>
+            <FormControlLabel>
+              <FormControlLabelText>Display Name</FormControlLabelText>
+            </FormControlLabel>
+            <Input>
+              <InputField
+                placeholder="Display Name"
+                value={displayName}
+                onChangeText={setDisplayName}
+              />
+            </Input>
+            {!errors.displayName ? (
+              <FormControlHelper>
+                <FormControlHelperText>This is how others will see you.</FormControlHelperText>
+              </FormControlHelper>
+            ) : (
+              <FormControlError>
+                <FormControlErrorIcon as={AlertCircleIcon} />
+                <FormControlErrorText>{errors.displayName}</FormControlErrorText>
+              </FormControlError>
+            )}
+          </FormControl>
 
-      <Button size="lg" onPress={handleSubmit} isDisabled={isLoading}>
-        <ButtonText>{isLoading ? 'Registering...' : 'Register Account'}</ButtonText>
-      </Button>
-    </VStack>
+          <FormControl isInvalid={!!errors.phone} style={styles.form}>
+            <FormControlLabel>
+              <FormControlLabelText>Phone Number</FormControlLabelText>
+            </FormControlLabel>
+            <Input>
+              <InputField
+                placeholder="Phone Number"
+                keyboardType="number-pad"
+                value={phone}
+                onChangeText={setPhone}
+                maxLength={10}
+              />
+            </Input>
+            {!errors.phone ? (
+              <FormControlHelper>
+                <FormControlHelperText>10-digit number only.</FormControlHelperText>
+              </FormControlHelper>
+            ) : (
+              <FormControlError>
+                <FormControlErrorIcon as={AlertCircleIcon} />
+                <FormControlErrorText>{errors.phone}</FormControlErrorText>
+              </FormControlError>
+            )}
+          </FormControl>
+
+          <FormControl isInvalid={!!errors.password} style={styles.form}>
+            <FormControlLabel>
+              <FormControlLabelText>Password</FormControlLabelText>
+            </FormControlLabel>
+            <Input>
+              <InputField
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChangeText={setPassword}
+              />
+            </Input>
+            {!errors.password ? (
+              <FormControlHelper>
+                <FormControlHelperText>
+                  Must be at least 6 characters.
+                </FormControlHelperText>
+              </FormControlHelper>
+            ) : (
+              <FormControlError>
+                <FormControlErrorIcon as={AlertCircleIcon} />
+                <FormControlErrorText>{errors.password}</FormControlErrorText>
+              </FormControlError>
+            )}
+          </FormControl>
+
+          <Button size="lg" onPress={handleSubmit} isDisabled={isLoading}>
+            <ButtonText>{isLoading ? 'Registering...' : 'Register Account'}</ButtonText>
+          </Button>
+        </VStack>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  form: {
+    marginBottom: 24,
+    borderColor: "#c49a8c",
+  },
+});

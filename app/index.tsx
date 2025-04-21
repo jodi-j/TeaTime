@@ -1,5 +1,4 @@
-import { supabase } from '../utils/supabase';
-import { View, Image } from "react-native";
+import { View, Image, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Button, ButtonText } from "@/components/ui/button"
 
@@ -12,17 +11,25 @@ export default function () {
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
+        backgroundColor: "#f5f2eb"
       }}
     >
-      <Image source={require('../assets/images/logo.jpg')}></Image>
+      <Image style={{padding: 24}} source={require('../assets/images/teatime.png')}></Image>
 
-      <Button size="lg" variant="solid" action="primary" onPress={() => router.push('/register')}>
+      <Button style={styles.button} size="lg" variant="solid" action="primary" onPress={() => router.push('/register')}>
         <ButtonText>Register</ButtonText>
       </Button>
 
-      <Button size="lg" variant="solid" action="secondary" onPress={() => router.push('/login')}>
+      <Button style={styles.button} size="lg" variant="solid" action="secondary" onPress={() => router.push('/login')}>
         <ButtonText>Login</ButtonText>
       </Button>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  button: {
+    width: "90%",
+    margin: 10,
+  },
+});

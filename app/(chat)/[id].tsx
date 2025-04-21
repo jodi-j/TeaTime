@@ -13,7 +13,7 @@ import {
   SafeAreaView,
   RefreshControl,
 } from "react-native";
-import { migrateUserKeys, supabase } from "../../utils/supabase";
+import { supabase } from "../../utils/supabase";
 import { encryptMessage, decryptMessage } from "../../utils/crypto";
 
 type Message = {
@@ -67,6 +67,7 @@ export default function ChatScreen() {
         navigation.setOptions({
           title: data.display_name,
           headerBackTitle: "Chat",
+          headerTintColor: "#aa786d",
         });
       }
     } catch (error) {
@@ -117,7 +118,6 @@ export default function ChatScreen() {
           const isIncoming = msg.receiver_id === user.id;
 
           try {
-            // Decrypt using the appropriate encrypted message
             console.log('Decrypting message:', msg.id);
             const encryptedMessage = isIncoming 
               ? msg.encrypted_message_for_receiver 
@@ -190,7 +190,6 @@ export default function ChatScreen() {
         return;
       }
 
-      // Get both sender's and recipient's public keys
       console.log('Getting keys...');
       const [
         { data: senderProfile, error: senderError },
@@ -296,11 +295,6 @@ export default function ChatScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 0}
     >
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Image source={{ uri: contactAvatar }} style={styles.avatar} />
-          <Text style={styles.chatName}>{contactName}</Text>
-        </View>
-
         <FlatList
           data={messages}
           keyExtractor={(item) => item.id.toString()}
@@ -341,13 +335,6 @@ const styles = StyleSheet.create({
     flex: 1, 
     backgroundColor: "#fff" 
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderBottomWidth: 1,
-    borderColor: "#ddd",
-  },
   avatar: {
     width: 36,
     height: 36,
@@ -368,7 +355,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   myMessage: {
-    backgroundColor: "#DCF8C6",
+    backgroundColor: "#c49a8c",
     alignSelf: "flex-end",
   },
   theirMessage: {
@@ -394,7 +381,7 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     marginLeft: 8,
-    backgroundColor: "blue",
+    backgroundColor: "#dca65e",
     borderRadius: 20,
     paddingVertical: 10,
     paddingHorizontal: 16,

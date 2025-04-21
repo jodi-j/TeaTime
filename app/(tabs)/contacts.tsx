@@ -16,6 +16,7 @@ import { Button, ButtonText } from "@/components/ui/button";
 import { VStack } from "@/components/ui/vstack";
 import { AlertCircleIcon } from "@/components/ui/icon";
 import { supabase } from '../../utils/supabase';
+import { Avatar, AvatarFallbackText } from "@/components/ui/avatar";
 
 interface Contact {
   id: string;
@@ -329,14 +330,13 @@ export default function Contacts() {
   };
 
   const renderContact = ({ item }: { item: Contact }) => {
-    const isSender = item.user_id === currentUser;
     const isPending = item.status === 'pending';
+    const isSender = item.user_id === currentUser;
 
     return (
       <Swipeable
-        ref={ref => swipeableRefs.current[item.id] = ref}
         renderRightActions={() => renderRightActions(item)}
-        rightThreshold={40}
+        overshootRight={false}
       >
         <TouchableOpacity 
           style={styles.contactItem}
@@ -346,7 +346,12 @@ export default function Contacts() {
             }
           }}
         >
-          <Text style={styles.contactName}>{item.user_profiles.display_name}</Text>
+          <View style={styles.contactInfo}>
+            <Avatar style={styles.avatar}>
+              <AvatarFallbackText>{item.user_profiles.display_name[0]}</AvatarFallbackText>
+            </Avatar>
+            <Text style={styles.contactName}>{item.user_profiles.display_name}</Text>
+          </View>
           {isPending && (
             <View style={styles.statusContainer}>
               {isSender ? (
@@ -488,8 +493,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  contactInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    backgroundColor: "#dca65e",
+  },
   contactName: {
     fontSize: 16,
+    fontWeight: '500',
   },
   pendingText: {
     color: '#64748B',

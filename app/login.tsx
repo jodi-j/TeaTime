@@ -6,8 +6,6 @@ import {
   FormControlErrorIcon,
   FormControlLabel,
   FormControlLabelText,
-  FormControlHelper,
-  FormControlHelperText,
 } from "@/components/ui/form-control";
 import { Input, InputField } from "@/components/ui/input"
 import { VStack } from "@/components/ui/vstack"
@@ -15,6 +13,8 @@ import { AlertCircleIcon } from "@/components/ui/icon"
 import { Button, ButtonText } from "@/components/ui/button"
 import React, { useState } from "react"
 import { supabase } from '../utils/supabase';
+import { StyleSheet, ScrollView, SafeAreaView, Pressable, Text } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function Login() {
   const router = useRouter();
@@ -42,7 +42,6 @@ export default function Login() {
         throw error;
       }
 
-      // Login successful, navigate to chat
       router.push('/(tabs)/chat');
     } catch (err) {
       console.error('Login error:', err);
@@ -53,55 +52,66 @@ export default function Login() {
   };
 
   return (
-    <VStack style={{ padding: 24 }}>
-      <FormControl
-        size="lg"
-        isRequired={true}
-        isInvalid={!!error}
-      >
-        <FormControlLabel>
-          <FormControlLabelText>Email</FormControlLabelText>
-        </FormControlLabel>
-        <Input style={{ marginBottom: 16 }}>
-          <InputField
-            type="text"
-            placeholder="email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </Input>
+    <SafeAreaView>
+      <ScrollView style={{height: "100%"}}>
+        <VStack style={{ padding: 24 }}>
+        <Pressable style={{flexDirection: "row", marginBottom: 12, alignItems: "center"}} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={22} style={{color: "#c49a8c"}}/>
+          <Text style={{ fontSize: 16, color: "#c49a8c", fontWeight: "bold" }}>Back</Text>
+        </Pressable>
 
-        <FormControlLabel>
-          <FormControlLabelText>Password</FormControlLabelText>
-        </FormControlLabel>
-        <Input style={{ marginBottom: 16 }}>
-          <InputField
-            type="password"
-            placeholder="password"
-            value={password}
-            onChangeText={setPassword}
-          />
-        </Input>
+        <Text style={{fontSize: 36, color: "#c49a8c", fontWeight: "bold", marginBottom: 12, alignSelf: "center"}}>Login</Text>
+          
+          <FormControl
+            size="lg"
+          isRequired={true}
+          isInvalid={!!error}
+        >
+          <FormControlLabel>
+            <FormControlLabelText>Email</FormControlLabelText>
+          </FormControlLabel>
+          <Input style={{ marginBottom: 16 }}>
+            <InputField
+              type="text"
+              placeholder="email"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </Input>
 
-        {error && (
-          <FormControlError>
-            <FormControlErrorIcon as={AlertCircleIcon} />
-            <FormControlErrorText>{error}</FormControlErrorText>
-          </FormControlError>
-        )}
-      </FormControl>
+          <FormControlLabel>
+            <FormControlLabelText>Password</FormControlLabelText>
+          </FormControlLabel>
+          <Input style={{ marginBottom: 16 }}>
+            <InputField
+              type="password"
+              placeholder="password"
+              value={password}
+              onChangeText={setPassword}
+            />
+          </Input>
 
-      <Button 
-        size="lg" 
-        variant="solid" 
-        action="primary" 
-        onPress={handleLogin}
-        isDisabled={isLoading}
-      >
-        <ButtonText>{isLoading ? 'Logging in...' : 'Login'}</ButtonText>
-      </Button>
-    </VStack>
+          {error && (
+            <FormControlError>
+              <FormControlErrorIcon as={AlertCircleIcon} />
+              <FormControlErrorText>{error}</FormControlErrorText>
+            </FormControlError>
+          )}
+        </FormControl>
+
+        <Button 
+          size="lg" 
+          variant="solid" 
+          action="primary" 
+          onPress={handleLogin}
+          isDisabled={isLoading}
+        >
+          <ButtonText>{isLoading ? 'Logging in...' : 'Login'}</ButtonText>
+        </Button>
+        </VStack>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
