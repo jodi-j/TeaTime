@@ -7,8 +7,26 @@ import { Button, ButtonText } from "@/components/ui/button";
 import { Modal, ModalBackdrop, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton } from '@/components/ui/modal';
 import { useRouter } from "expo-router";
 import { supabase } from "../../utils/supabase";
+import { decryptMessage } from "../../utils/crypto";
 
 type Message = {
+  id: number;
+  sender_id: string;
+  receiver_id: string;
+  encrypted_message_for_receiver: string;
+  encrypted_message_for_sender: string;
+  timestamp: string;
+  sender: {
+    display_name: string;
+    user_id: string;
+  };
+  receiver: {
+    display_name: string;
+    user_id: string;
+  };
+};
+
+type DatabaseMessage = {
   id: number;
   sender_id: string;
   receiver_id: string;
@@ -78,6 +96,18 @@ export default function chat() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      const { data: keyProfile, error: keyError } = await supabase
+        .from('user_profiles')
+        .select('private_key')
+        .eq('user_id', user.id)
+        .single();
+
+      if (keyError) throw keyError;
+      if (!keyProfile?.private_key) {
+        console.error('Private key not found for user:', user.id);
+        return;
+      }
+
       const { data: messages, error: messagesError } = await supabase
         .from('messages')
         .select(`
@@ -104,14 +134,14 @@ export default function chat() {
       if (messages) {
         const conversationMap = new Map<string, Conversation>();
         
-        (messages as unknown as Message[]).forEach(msg => {
+        for (const msg of messages as unknown as DatabaseMessage[]) {
           try {
             const isSender = msg.sender_id === user.id;
             const partner = isSender ? msg.receiver : msg.sender;
             
             if (!partner || !partner.user_id) {
               console.warn('Skipping message with invalid partner data:', msg);
-              return;
+              continue;
             }
             
             const partnerId = partner.user_id;
@@ -121,10 +151,21 @@ export default function chat() {
             const existingTime = existingConversation ? new Date(existingConversation.timestamp).getTime() : 0;
             
             if (!existingConversation || messageTime > existingTime) {
+              const encryptedMessage = isSender 
+                ? msg.encrypted_message_for_sender 
+                : msg.encrypted_message_for_receiver;
+              
+              let decryptedMessage = 'Unable to decrypt message';
+              try {
+                decryptedMessage = await decryptMessage(encryptedMessage, keyProfile.private_key);
+              } catch (err) {
+                console.error('Failed to decrypt message:', err);
+              }
+
               conversationMap.set(partnerId, {
                 id: partnerId,
                 name: partner.display_name,
-                lastMessage: isSender ? msg.encrypted_message_for_sender : msg.encrypted_message_for_receiver,
+                lastMessage: decryptedMessage,
                 timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 avatar: "https://randomuser.me/api/portraits/women/44.jpg"
               });
@@ -132,7 +173,7 @@ export default function chat() {
           } catch (error) {
             console.error('Error processing message:', error, msg);
           }
-        });
+        }
 
         const sortedConversations = Array.from(conversationMap.values())
           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
