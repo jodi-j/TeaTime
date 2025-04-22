@@ -341,9 +341,7 @@ export default function Contacts() {
         <TouchableOpacity 
           style={styles.contactItem}
           onPress={() => {
-            if (item.status === 'accepted') {
-              router.push(`/chat/${item.user_profiles.user_id}`);
-            }
+            router.push(`/contact/${item.user_profiles.user_id}`);
           }}
         >
           <View style={styles.contactInfo}>
@@ -499,12 +497,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   avatar: {
-    width: 40,
-    height: 40,
+    width: 50,
+    height: 50,
     backgroundColor: "#dca65e",
   },
   contactName: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '500',
   },
   pendingText: {
